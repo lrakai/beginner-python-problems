@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cloud Academy IDE Lab Platform"
+
+Parameters:
+  VpcId:
+    Type: String
+    Default: "{VpcId}"
+    Description: The ID of the default VPC.
+
+  SubnetId:
+    Type: String
+    Default: "{SubnetIdA}"
+    Description: The ID of the first subnet in the default VPC
+
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instances
+    Default: "{KeyName}"
+    Type: AWS::EC2::KeyPair::KeyName
+
+  EC2InstanceType:
+    Description: EC2 instance type for the SSH Lab Mgmt instance
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+    ConstraintDescription: Must be a valid EC2 instance type
+
+  EC2ImageId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-097e749c4a21d85f5
+    Description: CloudAcademy Docker AMI id - base on Amazon Linux 2
+
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cluster communication with worker nodes
+      VpcId: !Ref VpcId
+
+  EC2SecurityGroupSSHIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: EC2SecurityGroup
+    Properties:
+      GroupId: !Ref EC2SecurityGroup
+      Description: Allow 22 inbound SSH from everywhere
+      CidrIp: "0.0.0.0/0"
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22      
+
+  EC2SecurityGroupIDEIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: EC2SecurityGroup
+    Properties:
+      GroupId: !Ref EC2SecurityGroup
+      Description: Allow 80 inbound to IDE from everywhere
+      CidrIp: "0.0.0.0/0"
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+
+  EC2LaunchInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: "EC2InstancePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ec2:Describe*"
+                Resource: "*"
+
+  EC2LaunchInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref EC2LaunchInstanceRole
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      IamInstanceProfile:
+        Ref: EC2LaunchInstanceProfile
+      InstanceType:
+        Ref: EC2InstanceType
+      KeyName:
+        Ref: KeyName
+      ImageId:
+        Ref: EC2ImageId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - Ref: EC2SecurityGroup
+          SubnetId:
+            Ref: SubnetId
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash
+            echo starting...
+            mkdir -p /cloudacademy/lab
+            cd /cloudacademy/lab            
+            curl -sL https://api.github.com/repos/cloudacademy/pythonlp1-lab2/releases/latest | jq -r '.assets[].browser_download_url' | wget -qi -
+            unzip *.zip
+            chown -R ec2-user:ec2-user /cloudacademy
+            docker run --name ide -dit --restart unless-stopped -p 80:3000 -v "/cloudacademy/lab:/home/project:cached" cloudacademydevops/ide:python37
+            echo finished!!
+      Tags:
+        - Key: Name
+          Value: ide.python.platform.instance
+
+Outputs:
+  SubnetId:
+    Description: Subnet used in the VPC
+    Value: !Join [",", [!Ref SubnetId]]
+
+  VpcId:
+    Description: The VPC Id
+    Value: !Ref VpcId
