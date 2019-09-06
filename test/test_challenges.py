@@ -15,6 +15,12 @@ class TestChallenge(unittest.TestCase):
         self.assertEqual(odds(['This', 'one', 'is', 'hidden', '.']), 
                               ['one', 'hidden'])
 
+    def test_challenge_two(self):
+        # tests are specific to system created by cloudformation
+        self.assertEqual(traversal_count('/opt/yarn/bin/'), 5)
+        self.assertEqual(traversal_count('/usr/share/X11/'), 191)
+        self.assertEqual(traversal_count('/usr/include/X11/', 97))
+
 
 if __name__ == '__main__':
     unittest.main()
