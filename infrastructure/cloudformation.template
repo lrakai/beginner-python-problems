@@ -3,12 +3,12 @@ Description: "Cloud Academy IDE Lab Platform"
 
 Parameters:
   VpcId:
-    Type: String
+    Type: AWS::EC2::VPC::Id
     Default: "{VpcId}"
     Description: The ID of the default VPC.
 
   SubnetId:
-    Type: String
+    Type: AWS::EC2::Subnet::Id
     Default: "{SubnetIdA}"
     Description: The ID of the first subnet in the default VPC
 
@@ -116,12 +116,18 @@ Resources:
         Fn::Base64: !Sub |
             #!/bin/bash
             echo starting...
-            mkdir -p /cloudacademy/lab
-            cd /cloudacademy/lab            
-            curl -sL https://api.github.com/repos/cloudacademy/pythonlp1-lab2/releases/latest | jq -r '.assets[].browser_download_url' | wget -qi -
-            unzip *.zip
+            mkdir -p /cloudacademy/lab/code 
+            curl -o /tmp/repo.zip -sL https://github.com/lrakai/beginner-python-problems/archive/master.zip
+            mkdir -p /root/repo
+            unzip /tmp/repo.zip -d /root/repo
+            rm -f /tmp/repo.zip
+            repo_dir=$(ls -d /root/repo/*)
+            # seperate student-facing code from unit tests
+            cp $repo_dir/src/* /cloudacademy/lab/code
             chown -R ec2-user:ec2-user /cloudacademy
-            docker run --name ide -dit --restart unless-stopped -p 80:3000 -v "/cloudacademy/lab:/home/project:cached" cloudacademydevops/ide:python37
+            # adjust python sys.path for tests to include student project path
+            sed -i "s%sys.path.append.*%sys.path.append('/home/project/code')%g" $repo_dir/test/*
+            docker run --name ide -dit --restart unless-stopped -p 80:3000 -v "/cloudacademy/lab:/home/project:cached" -v "$repo_dir/test:/root/test:cached" cloudacademydevops/ide:python37
             echo finished!!
       Tags:
         - Key: Name
