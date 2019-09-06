@@ -2,7 +2,7 @@ import sys
 import os
 import unittest
 
-sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../solutions")
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../src")
 from challenge_one import odds
 
 
@@ -17,5 +17,4 @@ class TestChallenge(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    print(sys.path)
     unittest.main()
